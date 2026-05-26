@@ -2,6 +2,8 @@
 
 You run daily. Compile a briefing from configured sources and deliver it to enabled channels.
 
+**As you work, track any partial failures** (weather fetch failed, a feed fetched but returned 5xx, archive push failed, Discord post failed). You'll summarize these in step 7 as an alert post to `DISCORD_ALERT_WEBHOOK_URL` so silent degradation becomes visible.
+
 ---
 
 ## Steps
@@ -11,28 +13,48 @@ You run daily. Compile a briefing from configured sources and deliver it to enab
 Read `briefing/config.json` and `briefing/user-context.md`.
 Use the user context throughout — let it guide what you emphasize, how you frame info, and tone.
 
-### 2. Fetch weather
+### 2. Fetch weather (Open-Meteo)
 
-**Pick the active location.** Default to `config.weather.location` (home). If `config.weather.travel` exists, scan it for an entry where `end >= today` AND (`start` is absent OR `start <= today`). If one matches, use that entry's `location` instead — this is `location_label` for the rest of the briefing. If multiple match, use the first. Print which location was chosen and why (home vs. travel entry).
+**Pick the active location.** Default to `config.weather` (home — uses `location`, `lat`, `lon`). If `config.weather.travel` exists, scan it for an entry where `end >= today` AND (`start` is absent OR `start <= today`). If one matches, use that entry's `location`/`lat`/`lon` instead — this is the active entry for the rest of the briefing. If multiple match, use the first. Print which location was chosen and why (home vs. travel entry).
 
-Build the URL: `https://wttr.in/{location_label}?format=j1` (URL-encode the location if it contains spaces).
-WebFetch that URL to get JSON.
+**Resolve lat/lon.**
+- If the active entry has `lat` and `lon`, use them directly (the common case).
+- If `lat`/`lon` is missing, hit Open-Meteo's geocoding endpoint: `https://geocoding-api.open-meteo.com/v1/search?name={URL-encoded location}&count=1&language=en&format=json`. Use `results[0].latitude` and `results[0].longitude`. If geocoding fails or returns no results, record a partial failure ("weather: geocoding {location} failed") and skip the rest of step 2.
 
-**On 5xx response or fetch failure, wait 60 seconds and retry ONCE.** wttr.in occasionally returns 503 during traffic spikes — a single backoff retry usually catches a working response. If the retry also fails, set the weather message to a single-line warning (`⚠️ Weather data unavailable — wttr.in returned {status} on two attempts. Please check weather manually.`) and skip the rest of step 2 (still proceed with feeds and delivery — don't abort the briefing).
+**Fetch the forecast.** Build the URL:
+```
+https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_probability_max,weather_code&hourly=precipitation_probability,temperature_2m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1
+```
 
-Extract:
-- Current conditions: `current_condition[0]` — `temp_F`, `temp_C`, `weatherDesc`, `windspeedMiles`, `winddir16Point`, `WindGustMiles`, `humidity`
-- Today's forecast: `weather[0]` — `maxtempF`, `maxtempC`, `mintempF`, `mintempC`, hourly `chanceofrain` across the day
-- UV index: `weather[0].uvIndex`
+WebFetch that URL. **On 5xx response or fetch failure, wait 30 seconds and retry ONCE.** If the retry also fails, set the weather message to `⚠️ Weather data unavailable — Open-Meteo returned {status} on two attempts. Please check weather manually.`, record a partial failure ("weather: Open-Meteo {status}"), and skip the rest of step 2 (still proceed with feeds and delivery — don't abort the briefing).
 
-Always display temperatures as both units: `45°F / 7°C`.
+**Extract from the response:**
+- Current conditions (`current`): `temperature_2m` (F), `apparent_temperature` (F, "feels like"), `relative_humidity_2m` (%), `weather_code` (WMO code — map below), `wind_speed_10m` (mph), `wind_direction_10m` (degrees — convert to 16-point compass), `wind_gusts_10m` (mph).
+- Today's forecast (`daily`, index 0): `temperature_2m_max` (F high), `temperature_2m_min` (F low), `uv_index_max`, `precipitation_probability_max` (%), `weather_code` (today's overall).
+- Hourly precipitation (`hourly.precipitation_probability`): 24-element array starting at midnight local time. Pick out a few hourly chances spanning the day (e.g. morning/midday/afternoon/evening) for the "Hourly chance" line.
+
+**WMO weather code → text.** The API returns numeric codes; translate:
+- `0` Clear · `1` Mainly clear · `2` Partly cloudy · `3` Overcast
+- `45`, `48` Fog
+- `51`, `53`, `55` Drizzle (light/moderate/dense)
+- `56`, `57` Freezing drizzle
+- `61`, `63`, `65` Rain (light/moderate/heavy)
+- `66`, `67` Freezing rain
+- `71`, `73`, `75` Snow (light/moderate/heavy) · `77` Snow grains
+- `80`, `81`, `82` Rain showers (light/moderate/violent)
+- `85`, `86` Snow showers
+- `95` Thunderstorm · `96`, `99` Thunderstorm with hail
+
+**Wind direction conversion.** Map degrees → 16-point compass (N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW). Formula: `index = round(degrees / 22.5) mod 16`.
+
+**Dual-unit temperature display.** Open-Meteo returns Fahrenheit only (per our `temperature_unit=fahrenheit` param). Always display both: `°F / °C`. Convert: `C = round((F - 32) * 5/9)`.
 
 Also synthesize a **Cycling outlook** (3 bullet points) using `user-context.md`:
 - Temp context with both units (e.g. "Cold start at 33°F / 1°C, warming to 45°F / 7°C")
 - Wind impact on cycling (e.g. "Gusty NW winds — expect headwind/crosswind depending on route")
 - Visibility/conditions summary
 
-Rate **Confidence: High / Medium / Low** based on hourly forecast consistency. One sentence of reasoning.
+Rate **Confidence: High / Medium / Low** based on hourly forecast consistency (look at how flat or variable `hourly.precipitation_probability` and `hourly.temperature_2m` are across the day). One sentence of reasoning.
 
 ### 3. Fetch RSS feeds
 
@@ -72,7 +94,7 @@ For each entry in `config.feeds`:
 
 {✅ or ⚠️} **Confidence: {High/Medium/Low}** — {one-line reasoning}
 
-_Source: wttr.in_
+_Source: open-meteo.com_
 ```
 
 #### Message 2 — Feeds (one Discord message per feed that has new content)
@@ -142,11 +164,32 @@ Use Notion MCP — search for parent page matching `parent_search_query`, create
 **If `delivery.email.enabled` is true:**
 Use email MCP to send full version as HTML. (Skip if connector unavailable.)
 
+### 7. Alert on partial failure (only if anything went wrong)
+
+If your "partial failures" list (from the top) is **empty**, skip this step — silent success.
+
+If anything failed (weather geocoding/fetch, feed fetch, archive push, Discord post, etc.), POST a one-line status to `$DISCORD_ALERT_WEBHOOK_URL`. Use Python stdlib (not `requests`, which is not pre-installed) to JSON-encode the body, then curl:
+
+```bash
+STATUS_LINE="⚠️ Briefing $(date +%Y-%m-%d) partial: <comma-separated failures>"
+BODY=$(python3 -c 'import json,sys; print(json.dumps({"content": sys.stdin.read()}))' <<< "$STATUS_LINE")
+curl -sS -X POST -H "Content-Type: application/json" --data "$BODY" "$DISCORD_ALERT_WEBHOOK_URL"
+```
+
+Examples of partial-failure summaries:
+- `⚠️ Briefing 2026-05-26 partial: weather: Open-Meteo 503`
+- `⚠️ Briefing 2026-05-26 partial: feeds: Stratechery 504, Elena Verna timeout`
+- `⚠️ Briefing 2026-05-26 partial: archive push failed (403)`
+
+Keep it under 1 line. The goal is glanceable degradation signal — the routine session log has the full detail.
+
+If `DISCORD_ALERT_WEBHOOK_URL` is unset, fall back to `DISCORD_WEBHOOK_URL` (so failures still land somewhere visible).
+
 ---
 
 ## Done
 
 Print:
 ```
-Briefing YYYY-MM-DD complete. Delivered to: [channels]. Weather confidence: [level].
+Briefing YYYY-MM-DD complete. Delivered to: [channels]. Weather confidence: [level]. Partial failures: [count or "none"].
 ```

@@ -1,10 +1,12 @@
 {
   "weather": {
     "location": "Brooklyn, NY",
+    "lat": 40.6782,
+    "lon": -73.9442,
     "travel": [
-      { "location": "Barcelona, Spain", "start": "2026-05-19", "end": "2026-05-30" }
+      { "location": "Barcelona, Spain", "lat": 41.3851, "lon": 2.1734, "start": "2026-05-19", "end": "2026-05-30" }
     ],
-    "note": "Home 'location' is used by default. Add entries to 'travel' with 'location' and 'end' (YYYY-MM-DD, inclusive) while away; an optional 'start' date lets you pre-schedule future trips. The agent auto-reverts to home once 'end' passes, so expired entries are harmless — delete them at your leisure."
+    "note": "Home 'location' + 'lat'/'lon' is used by default. Add entries to 'travel' with 'location', 'lat', 'lon', and 'end' (YYYY-MM-DD, inclusive) while away; an optional 'start' date lets you pre-schedule future trips. If you omit lat/lon, the agent will geocode via Open-Meteo's /v1/search endpoint — but pre-caching coords skips a round-trip on the hot path. The agent auto-reverts to home once 'end' passes, so expired entries are harmless — delete them at your leisure."
   },
   "feeds": [
     {

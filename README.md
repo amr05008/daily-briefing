@@ -34,7 +34,7 @@ Two Discord messages arrive each morning:
 
 ✅ Confidence: High — hourly and period forecasts are consistent
 
-_Source: wttr.in_
+_Source: open-meteo.com_
 ```
 
 **Feeds** — one message per source, new posts only, no link previews:
@@ -55,7 +55,7 @@ Claude Code lets you schedule remote agents on a cron schedule. Each run:
 1. Anthropic's cloud clones this repo into an isolated environment
 2. The agent reads `briefing/prompt.md` for instructions
 3. It reads `briefing/user-context.md` to personalize the output
-4. It fetches weather from [wttr.in](https://wttr.in) (global coverage, °F and °C) and your configured RSS feeds
+4. It fetches weather from [Open-Meteo](https://open-meteo.com) (global coverage, no API key, dual °F/°C) and your configured RSS feeds
 5. It filters RSS to only posts published in the last 24 hours
 6. It posts to Discord (or other configured channels)
 7. It commits a full markdown archive to `briefing/output/`
@@ -156,16 +156,18 @@ Leave `weather.location` set to your home city and add a time-boxed entry to `we
 ```json
 "weather": {
   "location": "Brooklyn, NY",
+  "lat": 40.6782,
+  "lon": -73.9442,
   "travel": [
-    { "location": "Amsterdam, Netherlands", "end": "2026-04-24" },
-    { "location": "Tokyo, Japan", "start": "2026-06-10", "end": "2026-06-18" }
+    { "location": "Amsterdam, Netherlands", "lat": 52.3676, "lon": 4.9041, "end": "2026-04-24" },
+    { "location": "Tokyo, Japan", "lat": 35.6762, "lon": 139.6503, "start": "2026-06-10", "end": "2026-06-18" }
   ]
 }
 ```
 
 Dates are `YYYY-MM-DD` and interpreted in the agent's timezone. `start` is optional (omit for "starts immediately"); `end` is required and inclusive. Expired entries are ignored, so you can delete them whenever.
 
-Weather is powered by [wttr.in](https://wttr.in), which works for any city worldwide. Temperatures are shown in both °F and °C. Just use a city name — `Tokyo`, `London`, `Mexico City` — anything wttr.in recognizes. To verify a location works, visit `https://wttr.in/Your+City?format=j1` in your browser.
+Weather is powered by [Open-Meteo](https://open-meteo.com) — free, no API key, global coverage, °F and °C. Open-Meteo queries by lat/lon, so each location entry includes `lat`/`lon`. If you omit them, the agent falls back to Open-Meteo's [geocoding endpoint](https://geocoding-api.open-meteo.com/v1/search?name=YOUR+CITY) to resolve a city name into coordinates — but pre-caching coords skips a round-trip and removes one more thing that can fail. Look up coords once for new destinations and paste them in. (Previously used wttr.in; switched 2026-05-26 after sustained per-IP 503s from the routine sandbox.)
 
 ### Change the time
 Update the cron expression on your trigger. Cron runs in UTC — use [crontab.guru](https://crontab.guru) to convert. Remember to adjust in March (EDT, UTC-4) and November (EST, UTC-5).
