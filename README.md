@@ -1,8 +1,8 @@
 # scheduled-agents
 
-A self-hosted daily briefing powered by Claude Code scheduled agents — an alternative to digest tools like OpenClaw.
+A self-hosted daily briefing powered by Claude Code scheduled agents ("Routines"). I switched to using this after testing digest tools such as OpenClaw.
 
-Every morning at 6am, a Claude agent spins up in Anthropic's cloud, fetches weather and your RSS feeds, and posts a formatted briefing to Discord (or any channel you configure). No server to maintain, no subscription beyond Claude Code.
+Every morning at whatever time you decide, a Claude agent spins up in Anthropic's cloud, fetches weather and your RSS feeds, and posts a formatted briefing to Discord (or any channel you configure). No server to maintain, no subscription beyond Claude Code.
 
 ---
 
@@ -131,7 +131,7 @@ Create a new trigger with these settings:
 | Schedule | `0 10 * * *` (6am ET — adjust for your timezone, cron is UTC) |
 | Environment | Internet Access |
 | Git source | Your fork's GitHub URL |
-| Model | `claude-sonnet-4-6` |
+| Model | `claude-opus-4.8` |
 | Tools | `Bash, Read, Write, Edit, Glob, Grep, WebFetch` |
 
 **Bootstrap prompt** (paste this exactly):
