@@ -1,4 +1,4 @@
-# scheduled-agents
+# Daily Briefing 
 
 A self-hosted daily briefing powered by Claude Code scheduled agents ("Routines"). I switched to using this after testing digest tools such as OpenClaw.
 
@@ -191,18 +191,6 @@ Edit `briefing/prompt.md`. This is where the agent instructions live. You can ad
 | **Slack** | Same as Discord — Slack incoming webhooks work identically |
 | **Email** | Connect an email MCP (Resend, etc.) at [claude.ai/settings/connectors](https://claude.ai/settings/connectors) |
 | **SMS** | Connect a Twilio MCP at [claude.ai/settings/connectors](https://claude.ai/settings/connectors) |
-
----
-
-## Adding more agents
-
-Each agent is just a directory with a `prompt.md` and `config.json`. Drop a new one (e.g. `digest/`, `alerts/`, `weekly-summary/`) and create a separate trigger pointing to it.
-
----
-
-## Email triage
-
-For email triage, see the separate [`inbox-watcher`](https://github.com/amr05008/inbox-watcher) repo — a Cloudflare-Worker-based redesign that replaced the scheduled-trigger version originally in this repo on 2026-04-26.
 
 ---
 
