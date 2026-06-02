@@ -86,12 +86,21 @@ Remove git archiving from the agent. After this change the agent fetches data, p
 
 - `grep` of `briefing/prompt.md` and `README.md` for `git push`, `briefing/output`, and `archive`
   returns nothing (outside historical session logs / this spec).
-- After one scheduled run: Discord posts as normal, **and** `git fetch` shows no new commit on
-  `origin/main` and no new `claude/*` branch on origin.
+- **A live test run is mandatory before this work is considered done.** After one run:
+  - Both Discord messages (weather + feeds) arrive and render as expected.
+  - `git fetch` shows no new commit on `origin/main` and no new `claude/*` branch on origin.
 
 ## Verification
 
 - **Static:** grep the repo as above.
-- **Live:** trigger one run via "Run now"; confirm the Discord messages arrive; run
-  `git fetch --prune && git branch -r && git log -1 origin/main` and confirm no new branch and no
-  new commit.
+- **Live test run (required final step):** the briefing must actually be executed end-to-end and
+  confirmed to deliver to Discord. The Discord webhook URL is deliberately kept out of the repo
+  (passed via the trigger's bootstrap prompt), so the run happens one of two ways:
+  - **Path A (preferred) — user triggers "Run now"** from claude.ai/code/scheduled. Confirms the
+    real scheduled-agent path including the no-git-footprint behavior.
+  - **Path B — local run.** User provides `DISCORD_WEBHOOK_URL` for the session; the agent executes
+    `briefing/prompt.md` locally to post to Discord. Exercises delivery but not the Routine harness,
+    so the branch/commit check still relies on Path A or a later scheduled run.
+  - After either path: confirm both Discord messages arrived and rendered correctly, then run
+    `git fetch --prune && git branch -r && git log -1 origin/main` and confirm no new branch and
+    no new commit.
