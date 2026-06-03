@@ -2,7 +2,7 @@
 
 You run daily. Compile a briefing from configured sources and deliver it to enabled channels.
 
-**As you work, track any partial failures** (weather fetch failed, a feed fetched but returned 5xx, archive push failed, Discord post failed). You'll summarize these in step 7 as an alert post to `DISCORD_ALERT_WEBHOOK_URL` so silent degradation becomes visible.
+**As you work, track any partial failures** (weather fetch failed, a feed fetched but returned 5xx, Discord post failed). You'll summarize these in step 6 as an alert post to `DISCORD_ALERT_WEBHOOK_URL` so silent degradation becomes visible.
 
 ---
 
@@ -109,7 +109,7 @@ _Source: open-meteo.com_
 
 Send one separate POST per feed.
 
-#### Full version — for repo archive
+#### Full version — for Notion/email/SMS delivery
 
 Combine both messages into a single markdown file:
 ```
@@ -122,19 +122,7 @@ Combine both messages into a single markdown file:
 [feed content]
 ```
 
-### 5. Archive to repo
-
-Write the full version to `briefing/output/YYYY-MM-DD.md`.
-```bash
-git config user.email "briefing-agent@scheduled"
-git config user.name "Briefing Agent"
-git add briefing/output/YYYY-MM-DD.md
-git commit -m "briefing: YYYY-MM-DD"
-git push origin main
-```
-If push fails for any reason, skip silently and continue.
-
-### 6. Deliver to Discord
+### 5. Deliver to Discord
 
 **If `delivery.discord_webhook.enabled` is true:**
 Use the Discord webhook URL provided in your initial instructions (passed via DISCORD_WEBHOOK_URL). If no URL was provided and `config.discord_webhook.url` is also empty, skip Discord delivery and log a warning.
@@ -164,11 +152,11 @@ Use Notion MCP — search for parent page matching `parent_search_query`, create
 **If `delivery.email.enabled` is true:**
 Use email MCP to send full version as HTML. (Skip if connector unavailable.)
 
-### 7. Alert on partial failure (only if anything went wrong)
+### 6. Alert on partial failure (only if anything went wrong)
 
 If your "partial failures" list (from the top) is **empty**, skip this step — silent success.
 
-If anything failed (weather geocoding/fetch, feed fetch, archive push, Discord post, etc.), POST a one-line status to `$DISCORD_ALERT_WEBHOOK_URL`. Use Python stdlib (not `requests`, which is not pre-installed) to JSON-encode the body, then curl:
+If anything failed (weather geocoding/fetch, feed fetch, Discord post, etc.), POST a one-line status to `$DISCORD_ALERT_WEBHOOK_URL`. Use Python stdlib (not `requests`, which is not pre-installed) to JSON-encode the body, then curl:
 
 ```bash
 STATUS_LINE="⚠️ Briefing $(date +%Y-%m-%d) partial: <comma-separated failures>"
@@ -179,7 +167,6 @@ curl -sS -X POST -H "Content-Type: application/json" --data "$BODY" "$DISCORD_AL
 Examples of partial-failure summaries:
 - `⚠️ Briefing 2026-05-26 partial: weather: Open-Meteo 503`
 - `⚠️ Briefing 2026-05-26 partial: feeds: Stratechery 504, Elena Verna timeout`
-- `⚠️ Briefing 2026-05-26 partial: archive push failed (403)`
 
 Keep it under 1 line. The goal is glanceable degradation signal — the routine session log has the full detail.
 

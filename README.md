@@ -58,7 +58,6 @@ Claude Code lets you schedule remote agents on a cron schedule. Each run:
 4. It fetches weather from [Open-Meteo](https://open-meteo.com) (global coverage, no API key, dual °F/°C) and your configured RSS feeds
 5. It filters RSS to only posts published in the last 24 hours
 6. It posts to Discord (or other configured channels)
-7. It commits a full markdown archive to `briefing/output/`
 
 No server, no cron job, no infrastructure. Just a repo and a trigger.
 
@@ -143,7 +142,7 @@ Then read briefing/prompt.md and follow its instructions exactly.
 
 ### 6. Test it
 
-Hit "Run now" from [claude.ai/code/scheduled](https://claude.ai/code/scheduled). The agent takes 1–2 minutes to run. Check Discord and `briefing/output/` in your repo to verify.
+Hit "Run now" from [claude.ai/code/scheduled](https://claude.ai/code/scheduled). The agent takes 1–2 minutes to run. Check Discord to verify.
 
 ---
 
@@ -201,6 +200,4 @@ briefing/
   prompt.md          ← agent instructions (the "how")
   user-context.md    ← your personal context (the "who")
   config.json        ← feeds, weather, delivery channels (the "what")
-  output/
-    YYYY-MM-DD.md    ← daily archive committed by the agent
 ```
