@@ -111,7 +111,11 @@ Send one separate POST per feed.
 
 #### Full version — for Notion/email/SMS delivery
 
-Combine both messages into a single markdown file:
+**Only generate this if Notion, email, or SMS delivery is enabled in `config.json`.** If all three are disabled (Discord-only setup), skip this section entirely — do not produce it.
+
+Hold the combined version in memory for those channels to consume. **Do not write it to a file, do not check for an "archive convention," and do not commit anything — this agent never touches git.**
+
+Combine both messages into a single markdown document:
 ```
 # Daily Briefing — YYYY-MM-DD
 
