@@ -4,5 +4,6 @@ Quick lookup of working sessions by date.
 
 | Date | Session | Summary |
 |------|---------|---------|
+| 2026-07-06 | [strengthen-briefing-for-demo](2026-07-06-strengthen-briefing-for-demo.md) | NWS alerts, Headlines synthesis, quiet-feed consolidation, 26h window, CI config validation, Krebs feed — grilled and fixed pre-YouTube-demo |
 | 2026-06-02 | [remove-git-archiving](2026-06-02-remove-git-archiving.md) | Removed git archiving from the briefing agent; cleaned up 37 orphan branches |
 | 2026-04-12 | [pi-discord-channel-setup](2026-04-12-pi-discord-channel-setup.md) | Pi Discord channel setup |

@@ -1,0 +1,22 @@
+name: Validate briefing config
+
+# Catch config mistakes at push time, not at 6 AM when the briefing runs.
+on:
+  push:
+    paths:
+      - "briefing/**"
+      - "scripts/**"
+      - ".github/workflows/validate.yml"
+  pull_request:
+    paths:
+      - "briefing/**"
+      - "scripts/**"
+      - ".github/workflows/validate.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate config structure and feed URLs
+        run: python3 scripts/validate.py --check-feeds

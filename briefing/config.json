@@ -26,8 +26,14 @@
     },
     {
       "name": "Stratechery",
-      "url": "https://stratechery.passport.online/feed/rss/CZrhr5kWtJSyV4yWUSj4m",
-      "max_items": 4
+      "url": "$STRATECHERY_FEED_URL",
+      "max_items": 4,
+      "note": "Tokenized Passport feed — the real URL is passed via the trigger's bootstrap prompt, same pattern as the Discord webhook"
+    },
+    {
+      "name": "Krebs on Security",
+      "url": "https://krebsonsecurity.com/feed/",
+      "max_items": 3
     }
   ],
   "delivery": {

@@ -56,14 +56,33 @@ Also synthesize a **Cycling outlook** (3 bullet points) using `user-context.md`:
 
 Rate **Confidence: High / Medium / Low** based on hourly forecast consistency (look at how flat or variable `hourly.precipitation_probability` and `hourly.temperature_2m` are across the day). One sentence of reasoning.
 
+### 2b. Fetch weather alerts (NWS — US locations only)
+
+The National Weather Service only covers US locations. If step 2 could not resolve `lat`/`lon` (geocoding failed), skip this step too. Otherwise fetch active alerts for the active location's coordinates (NWS requires a User-Agent header, so use curl rather than WebFetch):
+
+```bash
+curl -s -w "\n%{http_code}" -H "User-Agent: daily-briefing-agent (personal use)" \
+  "https://api.weather.gov/alerts/active?point={lat},{lon}"
+```
+
+- **A 400 response whose body says the point is "out of bounds" means the location is outside NWS coverage** (e.g. a non-US travel location). Skip this step silently — that's expected, not a failure. Any *other* 400 means the coordinates themselves are malformed — record a partial failure ("alerts: NWS 400 {detail}") so a bad geocode doesn't hide forever.
+- **On 5xx or fetch failure, wait 30 seconds and retry ONCE.** If the retry also fails, record a partial failure ("alerts: NWS {status}") and continue — never block the briefing on alerts.
+- Parse the `features` array. For each alert take `properties.event` (e.g. "Heat Advisory"), `properties.severity`, and `properties.ends` (fall back to `properties.expires`) for the "until when".
+- If there are more than 3 active alerts, keep the 3 most severe (Extreme > Severe > Moderate > Minor > Unknown).
+- Summarize each alert in ONE line: event name, when it's in effect until, and the single most actionable detail from `properties.description` (e.g. "heat index up to 105°F"). Do not paste raw alert text — NWS descriptions run hundreds of words.
+
+Active alerts go at the **top** of the weather message (step 4), above current conditions — they're the most actionable thing in the briefing. If there are no active alerts, omit the alerts section entirely (no "no alerts" line).
+
 ### 3. Fetch RSS feeds
 
 For each entry in `config.feeds`:
+- **Resolve placeholder URLs first.** A `url` of the form `$VARNAME` (e.g. `$STRATECHERY_FEED_URL`) is a secret kept out of the repo — the real URL is provided in your initial instructions, same mechanism as `DISCORD_WEBHOOK_URL`. Substitute it before fetching. If no value was provided for that name, record the feed as **unavailable** ("{feed}: no URL provided" — a partial failure for step 6) and continue to the next feed. Never print a resolved secret URL in your output or logs.
 - **Wait 10 seconds between each feed fetch** (skip the wait before the first feed). Fetching all feeds back-to-back can trigger rate limits or bot protection on CDN edges, especially when running from cloud IPs.
 - WebFetch the feed URL.
-- **On 5xx response or fetch failure, wait 60 seconds and retry ONCE.** Feeds often 504 briefly during CDN cache regeneration — a single backoff retry usually catches the refreshed response. If the retry also fails, note "Feed unavailable ({status} error). No content delivered." for that feed and continue to the next feed (don't abort the whole briefing).
-- Parse the entries and **filter to only items published in the last 24 hours** (published date >= yesterday at the same time). Use the `<published>`, `<pubDate>`, or `<updated>` field depending on the feed format.
-- If no new items since yesterday, note "No new posts today" for that feed — do not skip the feed section entirely.
+- **On 5xx response or fetch failure, wait 60 seconds and retry ONCE.** Feeds often 504 briefly during CDN cache regeneration — a single backoff retry usually catches the refreshed response. If the retry also fails, record the feed as **unavailable** with its status (this is a partial failure for step 6) and continue to the next feed (don't abort the whole briefing). Unavailable is not quiet — it gets its own `_Unavailable:_` line in Headlines (step 4), never a spot in `_Quiet today:_`.
+- Parse the entries and **filter to only items published in the last 26 hours**. Use the `<published>`, `<pubDate>`, or `<updated>` field depending on the feed format. (Why 26 and not 24: if a run starts late or a fetch is slow, a strict 24-hour window silently drops anything published in the gap. The 2-hour overlap means an occasional repeated item instead of a silently missed one — the right trade for a briefing.)
+- If no new items in the window, record the feed as **quiet**. Quiet feeds appear only in the Headlines `_Quiet today:_` footnote (step 4) — do not compose a per-feed message for them.
+- Date edge cases: if an item has no parseable date, exclude it — and if an entire feed has no parseable dates, record a partial failure ("{feed}: no parseable dates") so the problem is visible instead of the feed looking permanently quiet. Items dated slightly in the future (feed clock skew) count as new.
 - From the filtered items, take up to `max_items` most recent.
 - For each: title, URL, and a 1-sentence description from the entry summary.
 
@@ -73,6 +92,10 @@ For each entry in `config.feeds`:
 
 ```
 [Claude] [WEATHER] {location_label} — {Day, Month DD}
+
+🚨 **Active alerts**
+• {event} — until {time/day}. {one actionable detail}
+(include this section ONLY if step 2b found active alerts; otherwise omit it entirely)
 
 🌡️ **Current conditions** (as of {time} ET)
 • {temp}°F, {sky conditions}
@@ -97,17 +120,35 @@ For each entry in `config.feeds`:
 _Source: open-meteo.com_
 ```
 
-#### Message 2 — Feeds (one Discord message per feed that has new content)
+#### Message 2 — Headlines (the synthesis — what actually matters today)
+
+Look across ALL new items from ALL feeds and pick the 2–3 that matter most to this user, using the interests in `user-context.md` to rank. This is editorial judgment, not a table of contents: a single must-read beats three maybes. If two feeds cover the same story, collapse them into one bullet.
+
+```
+[Claude] [HEADLINES] {Day, Month DD}
+
+• **[{title}](<{url}>)** — {why this matters to YOU, one sentence tied to your interests}
+• **[{title}](<{url}>)** — {...}
+
+_Quiet today: {comma-separated names of feeds with no new posts}_
+_Unavailable: {name} ({status})_
+```
+
+- The "why this matters" line is the value — connect it to the user's context (e.g. for an AI-tooling item: what they could do with it; for a security item: whether it's actionable), don't just restate the title.
+- Include the `_Quiet today:_` line only if at least one feed was quiet, and the `_Unavailable:_` line only if a feed failed both fetch attempts (step 3). Never list an unavailable feed as quiet — "no new posts" and "couldn't check" are different claims.
+- If NO feed has new items, this is the only feeds message; send: `[Claude] [HEADLINES] {Day, Month DD}` + `Quiet day — no new posts across any feeds.` (plus the `_Unavailable:_` line if applicable) and skip the per-feed messages entirely.
+
+#### Message 3+ — Per-feed detail (one Discord message per feed WITH new content)
 
 ```
 [Claude] [{FEED NAME}] {Day, Month DD}
 
 • **[{title}](<{url}>)** — {description}
 • **[{title}](<{url}>)** — {description}
-(repeat for each new item; if no new items, send "No new posts today.")
+(repeat for each new item)
 ```
 
-Send one separate POST per feed.
+**Only send a message for feeds that have new items.** Feeds with nothing new are already covered by the `_Quiet today:_` line in Headlines — do NOT send "No new posts today" messages; they're noise.
 
 #### Full version — for Notion/email/SMS delivery
 
@@ -115,24 +156,27 @@ Send one separate POST per feed.
 
 Hold the combined version in memory for those channels to consume. **Do not write it to a file, do not check for an "archive convention," and do not commit anything — this agent never touches git.**
 
-Combine both messages into a single markdown document:
+Combine the messages into a single markdown document (headlines first, deliberately — in a doc you read top-down, the synthesis is the executive summary):
 ```
 # Daily Briefing — YYYY-MM-DD
 
+## Headlines
+[headlines content]
+
 ## Weather — {location_label}
-[weather content]
+[weather content, including any active alerts]
 
 ## {feed.name}
-[feed content]
+[feed content — only feeds with new items]
 ```
 
 ### 5. Deliver to Discord
 
 **If `delivery.discord_webhook.enabled` is true:**
-Use the Discord webhook URL provided in your initial instructions (passed via DISCORD_WEBHOOK_URL). If no URL was provided and `config.discord_webhook.url` is also empty, skip Discord delivery and log a warning.
+Use the Discord webhook URL provided in your initial instructions (passed via DISCORD_WEBHOOK_URL). If no URL was provided and `config.delivery.discord_webhook.url` is also empty, skip Discord delivery and log a warning.
 
-Send Message 1 (weather) and Message 2 (feeds) as **separate POST requests** — one per message.
-Discord has a 2000 character limit; keep each message under that limit.
+Send the messages as **separate POST requests, in this order**: Message 1 (weather), Message 2 (headlines), then one per feed with new content (Message 3+).
+Discord has a 2000 character limit. If a message would exceed it, trim item descriptions first, then drop the lowest-priority items — never send a message that gets rejected at 6 AM.
 
 For each message, write payload to a temp file and POST:
 ```python

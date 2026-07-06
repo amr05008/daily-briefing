@@ -23,6 +23,7 @@ When presenting weather, lead with conditions most relevant to outdoor activity:
 
 Prioritize content from feeds that touches these topics:
 - AI/ML developments and LLM research
+- Security news — breaches, vulnerabilities, cybercrime investigations
 - Tech industry news
 - Cycling, endurance sports, training
 - NYC local context
@@ -31,5 +32,5 @@ Prioritize content from feeds that touches these topics:
 
 - Concise and direct — no filler, no preamble
 - Lead with the most actionable information first
-- **Full version** (Notion): structured markdown, include links
-- **Short version** (Discord/text): 5 lines max, use weather emoji, skip URLs
+- **Full version** (Notion/email): structured markdown, include links
+- **Discord**: follow the message templates in `prompt.md` — tight bullets, weather emoji, links as markdown (never bare URLs, which trigger previews)

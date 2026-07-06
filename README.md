@@ -8,11 +8,14 @@ Every morning at whatever time you decide, a Claude agent spins up in Anthropic'
 
 ## What it looks like
 
-Two Discord messages arrive each morning:
+A short stack of Discord messages arrives each morning:
 
-**Weather** — current conditions, today's forecast, cycling/activity outlook, confidence rating:
+**Weather** — active alerts first, then current conditions, today's forecast, cycling/activity outlook, confidence rating:
 ```
 [Claude] [WEATHER] Brooklyn, NY — Saturday, March 28
+
+🚨 Active alerts
+• Wind Advisory — until 7 PM today. Gusts to 45 mph; secure loose outdoor objects.
 
 🌡️ Current conditions (as of 6:02 AM ET)
 • 33°F / 1°C, Clear skies
@@ -37,7 +40,17 @@ Two Discord messages arrive each morning:
 _Source: open-meteo.com_
 ```
 
-**Feeds** — one message per source, new posts only, no link previews:
+**Headlines** — the agent reads everything across all your feeds and picks the 2–3 items that matter most to *you*, with a one-line reason why. Quiet feeds get a single footnote instead of their own "nothing today" message:
+```
+[Claude] [HEADLINES] Saturday, March 28
+
+• Vibe coding SwiftUI apps is a lot of fun — Willison's minimal-prompting workflow maps directly onto how you build side projects with Claude
+• Patch Tuesday, March Edition — two of the actively-exploited Windows flaws affect infra you run
+
+Quiet today: Elena Verna, Pragmatic Engineer
+```
+
+**Feeds** — then one message per source that actually has new posts, no link previews:
 ```
 [Claude] [SIMON WILLISON] Saturday, March 28
 
@@ -55,9 +68,10 @@ Claude Code lets you schedule remote agents on a cron schedule. Each run:
 1. Anthropic's cloud clones this repo into an isolated environment
 2. The agent reads `briefing/prompt.md` for instructions
 3. It reads `briefing/user-context.md` to personalize the output
-4. It fetches weather from [Open-Meteo](https://open-meteo.com) (global coverage, no API key, dual °F/°C) and your configured RSS feeds
-5. It filters RSS to only posts published in the last 24 hours
-6. It posts to Discord (or other configured channels)
+4. It fetches weather from [Open-Meteo](https://open-meteo.com) (global coverage, no API key, dual °F/°C) and active weather alerts from the [National Weather Service](https://www.weather.gov/documentation/services-web-api) (US locations; skipped gracefully elsewhere)
+5. It fetches your configured RSS feeds and filters to posts from the last ~24 hours (26h window, so a slow or late run never silently drops a post)
+6. It synthesizes a Headlines message — the 2–3 items across all feeds that matter most, ranked against your interests
+7. It posts to Discord (or other configured channels)
 
 No server, no cron job, no infrastructure. Just a repo and a trigger.
 
@@ -102,6 +116,20 @@ This is the most important file — it's what makes the briefing *yours*. Descri
 
 **Finding RSS feeds:** Most blogs and newsletters have a feed at `/feed` or `/atom.xml`. Substack newsletters are always at `https://yourpublication.substack.com/feed`.
 
+**Private or tokenized feeds** (Stratechery Passport, paid Substacks, anything whose feed URL contains a personal access token): don't put the real URL in `config.json` — a tokenized URL *is* a credential, and anyone who can read your repo can read your paid feed as you. Use a `$PLACEHOLDER` instead:
+
+```json
+{ "name": "Stratechery", "url": "$STRATECHERY_FEED_URL", "max_items": 4 }
+```
+
+…and pass the real URL in the trigger's bootstrap prompt (step 5), exactly like the Discord webhook. The agent substitutes it at run time; the config validator skips placeholders.
+
+**Config is validated on every push.** A GitHub Action (`.github/workflows/validate.yml`) checks that `config.json` parses, has the right shape, and that every feed URL actually resolves and responds — so a broken config turns CI red minutes after you push, instead of degrading tomorrow's 6 AM briefing. You can also run it locally before pushing:
+
+```bash
+python3 scripts/validate.py --check-feeds
+```
+
 ### 4. Set up Discord delivery
 
 1. In Discord, go to your channel → Edit Channel → Integrations → Webhooks → New Webhook
@@ -113,10 +141,13 @@ This is the most important file — it's what makes the briefing *yours*. Descri
 The repo has been cloned into your working directory.
 Get today's date by running: date +%Y-%m-%d
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
+STRATECHERY_FEED_URL=https://stratechery.passport.online/feed/rss/YOUR_TOKEN
 Then read briefing/prompt.md and follow its instructions exactly.
 ```
 
-No bot setup, no OAuth — Discord webhooks are just HTTPS endpoints. Storing the URL in the trigger (not the repo) means you can keep your repo public without exposing it.
+(The `STRATECHERY_FEED_URL` line is only needed if you use a `$PLACEHOLDER` feed — one line per placeholder, named to match. You can also add `DISCORD_ALERT_WEBHOOK_URL=...` pointing at a separate channel if you want partial-failure alerts routed away from the briefing itself — if you skip it, alerts fall back to the main webhook.)
+
+No bot setup, no OAuth — Discord webhooks are just HTTPS endpoints. Storing secrets in the trigger (not the repo) means you can keep your repo public without exposing them.
 
 ### 5. Create the scheduled trigger
 
@@ -133,12 +164,15 @@ Create a new trigger with these settings:
 | Model | `claude-opus-4-8` |
 | Tools | `Bash, Read, Write, Edit, Glob, Grep, WebFetch` |
 
-**Bootstrap prompt** (paste this exactly):
+**Bootstrap prompt** — the version from step 4, with your secret lines filled in:
 ```
 The repo has been cloned into your working directory.
 Get today's date by running: date +%Y-%m-%d
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
+STRATECHERY_FEED_URL=https://stratechery.passport.online/feed/rss/YOUR_TOKEN
 Then read briefing/prompt.md and follow its instructions exactly.
 ```
+(Drop the `STRATECHERY_FEED_URL` line if you have no `$PLACEHOLDER` feeds.)
 
 ### 6. Test it
 
@@ -172,7 +206,7 @@ Weather is powered by [Open-Meteo](https://open-meteo.com) — free, no API key,
 Update the cron expression on your trigger. Cron runs in UTC — use [crontab.guru](https://crontab.guru) to convert. Remember to adjust in March (EDT, UTC-4) and November (EST, UTC-5).
 
 ### Add or remove feeds
-Edit the `feeds` array in `config.json`. Feeds are filtered to the last 24 hours automatically, so weekly newsletters will show "No new posts today" on quiet days.
+Edit the `feeds` array in `config.json`. Feeds are filtered to the last ~24 hours automatically. Weekly newsletters are fine to include — on quiet days they just appear in the Headlines footnote (`Quiet today: ...`) instead of getting their own message.
 
 ### Change what the briefing focuses on
 Edit `briefing/user-context.md` — the agent reads it on every run. No trigger changes needed.
@@ -186,7 +220,7 @@ Edit `briefing/prompt.md`. This is where the agent instructions live. You can ad
 
 | Channel | What's needed |
 |---------|--------------|
-| **Discord** | Webhook URL in `config.json` — no connector needed |
+| **Discord** | Webhook URL in the trigger's bootstrap prompt (see Setup step 4) — no connector needed |
 | **Slack** | Same as Discord — Slack incoming webhooks work identically |
 | **Email** | Connect an email MCP (Resend, etc.) at [claude.ai/settings/connectors](https://claude.ai/settings/connectors) |
 | **SMS** | Connect a Twilio MCP at [claude.ai/settings/connectors](https://claude.ai/settings/connectors) |
@@ -200,4 +234,8 @@ briefing/
   prompt.md          ← agent instructions (the "how")
   user-context.md    ← your personal context (the "who")
   config.json        ← feeds, weather, delivery channels (the "what")
+scripts/
+  validate.py        ← config sanity check (CI runs it on every push)
+.github/workflows/
+  validate.yml       ← the CI trigger for the check above
 ```
