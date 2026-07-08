@@ -138,17 +138,23 @@ _Unavailable: {name} ({status})_
 - Include the `_Quiet today:_` line only if at least one feed was quiet, and the `_Unavailable:_` line only if a feed failed both fetch attempts (step 3). Never list an unavailable feed as quiet — "no new posts" and "couldn't check" are different claims.
 - If NO feed has new items, this is the only feeds message; send: `[Claude] [HEADLINES] {Day, Month DD}` + `Quiet day — no new posts across any feeds.` (plus the `_Unavailable:_` line if applicable) and skip the per-feed messages entirely.
 
-#### Message 3+ — Per-feed detail (one Discord message per feed WITH new content)
+#### Message 3+ — Per-feed detail (one Discord message per feed with new items NOT already in Headlines)
 
 ```
 [Claude] [{FEED NAME}] {Day, Month DD}
 
 • **[{title}](<{url}>)** — {description}
 • **[{title}](<{url}>)** — {description}
-(repeat for each new item)
+(repeat for each remaining item)
 ```
 
-**Only send a message for feeds that have new items.** Feeds with nothing new are already covered by the `_Quiet today:_` line in Headlines — do NOT send "No new posts today" messages; they're noise.
+**Exclude any item you already surfaced in Headlines (Message 2).** Headlines is the synthesis; the per-feed detail carries the *rest* of that feed's new items, so nothing appears twice. Match each candidate item against the ones you promoted to Headlines by URL (fall back to title) and drop the matches. This is the whole point of this section — an item must never show up in both Headlines and its per-feed message.
+
+**Only send a feed's message if it has at least one item left after that exclusion.** Skip the message entirely when:
+- the feed had no new items at all (already covered by the `_Quiet today:_` line in Headlines), or
+- every one of its new items was promoted to Headlines (fully covered there — send nothing for it).
+
+Do NOT send "No new posts today" messages, and do NOT list a feed whose items were all promoted to Headlines in `_Quiet today:_` — being promoted is not the same as being quiet.
 
 #### Full version — for Notion/email/SMS delivery
 
