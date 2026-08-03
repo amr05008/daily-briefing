@@ -34,7 +34,9 @@ Two Discord messages arrive each morning:
 
 ✅ Confidence: High — hourly and period forecasts are consistent
 
-_Source: open-meteo.com_
+🅿️ Alternate Side Parking: In effect today
+
+_Source: open-meteo.com · NYC 311 for parking_
 ```
 
 **Feeds** — one message per source, new posts only, no link previews:
@@ -56,9 +58,10 @@ Claude Code lets you schedule remote agents on a cron schedule. Each run:
 2. The agent reads `briefing/prompt.md` for instructions
 3. It reads `briefing/user-context.md` to personalize the output
 4. It fetches weather from [Open-Meteo](https://open-meteo.com) (global coverage, no API key, dual °F/°C) and your configured RSS feeds
-5. It filters RSS to only posts published in the last 24 hours
-6. It posts to Discord (or other configured channels)
-7. It commits a full markdown archive to `briefing/output/`
+5. Optionally, it adds a one-line NYC Alternate Side Parking status from the [NYC 311 calendar API](https://api-portal.nyc.gov) (NYC home only — see Customizing)
+6. It filters RSS to only posts published in the last 24 hours
+7. It posts to Discord (or other configured channels)
+8. It commits a full markdown archive to `briefing/output/`
 
 No server, no cron job, no infrastructure. Just a repo and a trigger.
 
@@ -141,6 +144,11 @@ Get today's date by running: date +%Y-%m-%d
 Then read briefing/prompt.md and follow its instructions exactly.
 ```
 
+If you enabled the NYC Alternate Side Parking line, add your key on its own line (see [Customizing](#nyc-alternate-side-parking-status)):
+```
+NYC_ASP_API_KEY=your_nyc_311_subscription_key
+```
+
 ### 6. Test it
 
 Hit "Run now" from [claude.ai/code/scheduled](https://claude.ai/code/scheduled). The agent takes 1–2 minutes to run. Check Discord and `briefing/output/` in your repo to verify.
@@ -168,6 +176,23 @@ Leave `weather.location` set to your home city and add a time-boxed entry to `we
 Dates are `YYYY-MM-DD` and interpreted in the agent's timezone. `start` is optional (omit for "starts immediately"); `end` is required and inclusive. Expired entries are ignored, so you can delete them whenever.
 
 Weather is powered by [Open-Meteo](https://open-meteo.com) — free, no API key, global coverage, °F and °C. Open-Meteo queries by lat/lon, so each location entry includes `lat`/`lon`. If you omit them, the agent falls back to Open-Meteo's [geocoding endpoint](https://geocoding-api.open-meteo.com/v1/search?name=YOUR+CITY) to resolve a city name into coordinates — but pre-caching coords skips a round-trip and removes one more thing that can fail. Look up coords once for new destinations and paste them in. (Previously used wttr.in; switched 2026-05-26 after sustained per-IP 503s from the routine sandbox.)
+
+### NYC Alternate Side Parking status
+
+If you're in NYC, the briefing can add a one-line ASP status to the weather message — `🅿️ Alternate Side Parking: In effect today` or `Suspended today — {holiday}`. It's pulled from NYC's official [311 calendar API](https://api-portal.nyc.gov), and it auto-skips whenever a `weather.travel` entry is active (no point reporting NYC parking from Tokyo).
+
+It needs a **free** NYC 311 API key:
+
+1. Sign up at [api-portal.nyc.gov](https://api-portal.nyc.gov)
+2. Subscribe to the **"NYC 311 Public Developers"** product and copy your subscription key
+3. In `config.json`, set `alternate_side_parking.enabled: true` (default)
+4. Add the key to your trigger's bootstrap prompt (keeps it out of the repo, same pattern as the Discord webhook):
+
+```
+NYC_ASP_API_KEY=your_nyc_311_subscription_key
+```
+
+If the feature is enabled but the key is missing, or the API call fails, the line is skipped **and a partial-failure alert fires** (via the same alert path as a failed weather/feed fetch) — so a silent breakage surfaces instead of hiding. The rest of the briefing is unaffected. Set `enabled: false` to turn it off entirely (e.g. if you're not in NYC) — that's a clean off with no alert.
 
 ### Change the time
 Update the cron expression on your trigger. Cron runs in UTC — use [crontab.guru](https://crontab.guru) to convert. Remember to adjust in March (EDT, UTC-4) and November (EST, UTC-5).

@@ -2,7 +2,7 @@
 
 You run daily. Compile a briefing from configured sources and deliver it to enabled channels.
 
-**As you work, track any partial failures** (weather fetch failed, a feed fetched but returned 5xx, archive push failed, Discord post failed). You'll summarize these in step 7 as an alert post to `DISCORD_ALERT_WEBHOOK_URL` so silent degradation becomes visible.
+**As you work, track any partial failures** (weather fetch failed, a feed fetched but returned 5xx, archive push failed, Discord post failed). You'll summarize these in step 8 as an alert post to `DISCORD_ALERT_WEBHOOK_URL` so silent degradation becomes visible.
 
 ---
 
@@ -56,7 +56,45 @@ Also synthesize a **Cycling outlook** (3 bullet points) using `user-context.md`:
 
 Rate **Confidence: High / Medium / Low** based on hourly forecast consistency (look at how flat or variable `hourly.precipitation_probability` and `hourly.temperature_2m` are across the day). One sentence of reasoning.
 
-### 3. Fetch RSS feeds
+### 3. Fetch NYC Alternate Side Parking status (optional — NYC home only)
+
+A one-line "rules in effect / suspended" status for NYC alternate side parking (ASP), appended to the weather message (step 5).
+
+**Skip conditions** (decide up front):
+- If `config.alternate_side_parking.enabled` is not `true` → skip silently (feature is off): no line, no partial failure.
+- Else if the active weather location chosen in step 2 is a **travel** entry → skip silently (ASP is irrelevant away from NYC): no line, no partial failure.
+- Else if **no NYC 311 key was provided** in your initial instructions (see below) → the feature is enabled but misconfigured: skip the line but **record a partial failure** (`asp: key not provided`) so step 8 surfaces it. Do NOT skip silently here — the whole point of enabling it is to get the line.
+
+Otherwise, fetch today's status from NYC's official 311 calendar API.
+
+**The key.** The NYC 311 subscription key is provided in your initial instructions as `NYC_ASP_API_KEY` (same channel as `DISCORD_WEBHOOK_URL` — it is never stored in the repo). Make it available to the shell before calling curl: if it is not already exported as an env var, export it first from the value in your instructions:
+
+```bash
+export NYC_ASP_API_KEY='<value from your initial instructions>'
+```
+
+**Fetch.** The API requires the key as a request header, so use `curl` via Bash (WebFetch can't set custom headers). Query in NYC time so the date is correct even if the run time ever moves off the 6am ET schedule:
+
+```bash
+TODAY_US=$(TZ=America/New_York date +%m/%d/%Y)
+HTTP=$(curl -sS --max-time 20 \
+  -H "Ocp-Apim-Subscription-Key: $NYC_ASP_API_KEY" \
+  "https://api.nyc.gov/public/api/GetCalendar?fromdate=${TODAY_US}&todate=${TODAY_US}" \
+  -o /tmp/asp.json -w "%{http_code}")
+echo "ASP fetch HTTP $HTTP"
+```
+
+**On a non-200 status, a body containing `"statusCode": 401` (missing/invalid key), or a fetch failure:** wait 15 seconds and retry ONCE. If it still fails, record a partial failure (`asp: NYC 311 {status}`), skip the ASP line, and continue to feeds — do not abort the briefing.
+
+**Parse `/tmp/asp.json`.** The response has a `days` array; take the first element (today) and search its `items` array for the item whose `type` is `"Alternate Side Parking"`. Map its `status` field **explicitly** — these are the only valid values, so do NOT collapse "anything that isn't IN EFFECT" into "suspended" (a wrong "Suspended" can cost a ticket/tow):
+- `"IN EFFECT"` → `🅿️ **Alternate Side Parking:** In effect today`
+- `"SUSPENDED"` → `🅿️ **Alternate Side Parking:** Suspended today{ — reason}` — for the reason, prefer the item's `exceptionName` (short, e.g. "Passover"); fall back to a trimmed `details` only if `exceptionName` is absent; omit the reason entirely if neither is usable.
+- `"NOT IN EFFECT"` → `🅿️ **Alternate Side Parking:** Not in effect today` (a normal off-day, e.g. Sunday — do **not** word this as "suspended")
+- `"NO INFORMATION"`, any unrecognized value, or a missing ASP item / unreadable JSON → **do not guess** (rendering "Suspended" when the true state is unknown is the dangerous direction): skip the line and record a partial failure (`asp: status unknown` or `asp: unexpected response shape`).
+
+Hold the resulting one-liner (if any) for the weather message (step 5). Nothing is posted in this step.
+
+### 4. Fetch RSS feeds
 
 For each entry in `config.feeds`:
 - **Wait 10 seconds between each feed fetch** (skip the wait before the first feed). Fetching all feeds back-to-back can trigger rate limits or bot protection on CDN edges, especially when running from cloud IPs.
@@ -67,7 +105,7 @@ For each entry in `config.feeds`:
 - From the filtered items, take up to `max_items` most recent.
 - For each: title, URL, and a 1-sentence description from the entry summary.
 
-### 4. Compile messages
+### 5. Compile messages
 
 #### Message 1 — Weather (Discord format, uses ** for bold, • for bullets)
 
@@ -94,7 +132,9 @@ For each entry in `config.feeds`:
 
 {✅ or ⚠️} **Confidence: {High/Medium/Low}** — {one-line reasoning}
 
-_Source: open-meteo.com_
+{🅿️ ASP line from step 3 — include this line ONLY if step 3 produced one; omit entirely if the step was skipped or failed}
+
+_Source: open-meteo.com{ · NYC 311 for parking — append only when the ASP line is present}_
 ```
 
 #### Message 2 — Feeds (one Discord message per feed that has new content)
@@ -122,7 +162,7 @@ Combine both messages into a single markdown file:
 [feed content]
 ```
 
-### 5. Archive to repo
+### 6. Archive to repo
 
 Write the full version to `briefing/output/YYYY-MM-DD.md`.
 ```bash
@@ -134,7 +174,7 @@ git push origin main
 ```
 If push fails for any reason, skip silently and continue.
 
-### 6. Deliver to Discord
+### 7. Deliver to Discord
 
 **If `delivery.discord_webhook.enabled` is true:**
 Use the Discord webhook URL provided in your initial instructions (passed via DISCORD_WEBHOOK_URL). If no URL was provided and `config.discord_webhook.url` is also empty, skip Discord delivery and log a warning.
@@ -164,7 +204,7 @@ Use Notion MCP — search for parent page matching `parent_search_query`, create
 **If `delivery.email.enabled` is true:**
 Use email MCP to send full version as HTML. (Skip if connector unavailable.)
 
-### 7. Alert on partial failure (only if anything went wrong)
+### 8. Alert on partial failure (only if anything went wrong)
 
 If your "partial failures" list (from the top) is **empty**, skip this step — silent success.
 
