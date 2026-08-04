@@ -163,7 +163,7 @@ Create a new trigger with these settings:
 | Setting | Value |
 |---------|-------|
 | Name | `Daily Briefing` |
-| Schedule | `0 10 * * *` (6am ET — adjust for your timezone, cron is UTC) |
+| Schedule | `15 10 * * *` (6:15am ET — adjust for your timezone, cron is UTC) |
 | Environment | Internet Access |
 | Git source | Your fork's GitHub URL |
 | Model | `claude-opus-4-8` |
@@ -221,7 +221,7 @@ The meter clause matters because the two rules diverge — ASP is suspended for 
 
 **It stays quiet on ordinary days.** ASP is in effect roughly 330 days a year, and a line saying so every morning is wallpaper you stop reading. The line appears only when the answer is *different* — a holiday suspension or a Sunday — so its presence is itself the signal. The trade-off worth knowing: on a normal day, "no line" and "feature switched off" look identical in the briefing. Real breakage is covered by the partial-failure alert instead, which is why the failure paths below are loud.
 
-Why the 311 calendar and not [@NYCASP](https://x.com/NYCASP): the account posts "rules are in effect today" at **7:30 AM ET**, after this briefing runs. Only the previous day's 4 PM "tomorrow" tweet is available at 6 AM, and there's no tweet at all covering Sundays. The 311 API answers for any date directly and returns a structured status instead of prose.
+Why the 311 calendar and not [@NYCASP](https://x.com/NYCASP): the account posts "rules are in effect today" at **7:30 AM ET**, after this briefing runs. Only the previous day's 4 PM "tomorrow" tweet is available at 6:15 AM, and there's no tweet at all covering Sundays. The 311 API answers for any date directly and returns a structured status instead of prose.
 
 It needs a **free** NYC 311 API key:
 
