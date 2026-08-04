@@ -108,14 +108,14 @@ echo "ASP fetch HTTP $HTTP"
 | `status` | Output |
 |---|---|
 | `IN EFFECT` | **No line.** Normal day — this is the silent path. |
-| `SUSPENDED` | `🅿️ **Alt Side Parking:** Suspended today{ — reason}` |
+| `SUSPENDED` | `🅿️ **Alt Side Parking:** Suspended today{ — reason}{ (meters …)}` |
 | `NOT IN EFFECT` | `🅿️ **Alt Side Parking:** Not in effect today{ (Sunday)}` |
 | `NO INFORMATION` | No line, **and** record a partial failure (`asp: status unknown`). |
 
 - Anything else — an unrecognized `status`, no `"Alternate Side Parking"` item, an empty `days` array, or unparseable JSON — is treated exactly like `NO INFORMATION`: no line, plus a partial failure (`asp: unexpected response shape`). Guessing here is the one thing that can cost a tow, so a wrong line is strictly worse than no line.
-- For the `SUSPENDED` reason, prefer the item's `exceptionName` (short, e.g. "Tisha B'Av"); fall back to a trimmed `details` only if `exceptionName` is missing; omit the reason entirely if neither is usable.
+- For the `SUSPENDED` reason, prefer the item's `exceptionName`, **stripping a trailing year** — the API returns `"Tisha B'Av 2026"` and `"Labor Day 2026"`, and the briefing is already dated. Fall back to a trimmed `details` only if `exceptionName` is missing; omit the reason entirely if neither is usable.
+- **Meters on a suspension day: report only what `details` says.** Meter rules and ASP diverge by holiday and the field states it explicitly — `"Alternate side parking is suspended for Tisha B'Av. Meters are in effect."` vs `"Alternate side parking and meters are suspended for Labor Day."` Append `(meters still in effect)` or `(meters also suspended)` accordingly. If `details` is absent or says nothing about meters, **omit the clause** — never infer it from the holiday.
 - Append `(Sunday)` to the `NOT IN EFFECT` line only when today actually is a Sunday in `America/New_York` — the API documents this status as the Sunday case, but don't assert a weekday you haven't checked.
-- **Say nothing about parking meters.** ASP and meter rules diverge on holidays and this endpoint does not reliably distinguish them.
 
 Hold the line (if any) for the weather message in step 4.
 

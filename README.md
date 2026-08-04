@@ -37,7 +37,7 @@ A short stack of Discord messages arrives each morning:
 
 ✅ Confidence: High — hourly and period forecasts are consistent
 
-🅿️ Alt Side Parking: Suspended today — Tisha B'Av
+🅿️ Alt Side Parking: Suspended today — Tisha B'Av (meters still in effect)
 
 _Source: open-meteo.com · NYC 311 for parking_
 ```
@@ -212,9 +212,12 @@ Weather is powered by [Open-Meteo](https://open-meteo.com) — free, no API key,
 If home is in NYC, the briefing can flag days when alternate side parking isn't running normally:
 
 ```
-🅿️ Alt Side Parking: Suspended today — Tisha B'Av
+🅿️ Alt Side Parking: Suspended today — Tisha B'Av (meters still in effect)
+🅿️ Alt Side Parking: Suspended today — Labor Day (meters also suspended)
 🅿️ Alt Side Parking: Not in effect today (Sunday)
 ```
+
+The meter clause matters because the two rules diverge — ASP is suspended for Tisha B'Av but meters still run, while Labor Day suspends both. It's taken verbatim from the API's own `details` field for that date, never inferred from the holiday; if the field doesn't mention meters, the clause is omitted.
 
 **It stays quiet on ordinary days.** ASP is in effect roughly 330 days a year, and a line saying so every morning is wallpaper you stop reading. The line appears only when the answer is *different* — a holiday suspension or a Sunday — so its presence is itself the signal. The trade-off worth knowing: on a normal day, "no line" and "feature switched off" look identical in the briefing. Real breakage is covered by the partial-failure alert instead, which is why the failure paths below are loud.
 
