@@ -8,6 +8,10 @@
     ],
     "note": "Home 'location' + 'lat'/'lon' is used by default. Add entries to 'travel' with 'location', 'lat', 'lon', and 'end' (YYYY-MM-DD, inclusive) while away; an optional 'start' date lets you pre-schedule future trips. If you omit lat/lon, the agent will geocode via Open-Meteo's /v1/search endpoint — but pre-caching coords skips a round-trip on the hot path. The agent auto-reverts to home once 'end' passes, so expired entries are harmless — delete them at your leisure."
   },
+  "alternate_side_parking": {
+    "enabled": true,
+    "note": "Adds a one-line NYC Alternate Side Parking status to the weather message ONLY on days it isn't running normally — a holiday suspension or a Sunday. Ordinary 'in effect' days print nothing. Runs only when the active weather location is home AND inside NYC (lat 40.47-40.93, lon -74.28 to -73.68), so it auto-skips while travelling and stays silent in a fork whose home is elsewhere — no need to disable it. The box is coarse: it reaches west to cover Staten Island, which also catches nearby New Jersey (Newark, Jersey City), so set enabled:false there. Requires a FREE NYC 311 subscription key passed via the trigger bootstrap as NYC_ASP_API_KEY (never commit it): sign up at https://api-portal.nyc.gov and subscribe to 'NYC 311 Public Developers'. Enabled-in-NYC but no key, a failed fetch, or an unrecognized status all record a partial failure — the line is skipped, never guessed."
+  },
   "feeds": [
     {
       "name": "Simon Willison",

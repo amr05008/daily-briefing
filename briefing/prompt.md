@@ -73,6 +73,57 @@ curl -s -w "\n%{http_code}" -H "User-Agent: daily-briefing-agent (personal use)"
 
 Active alerts go at the **top** of the weather message (step 4), above current conditions — they're the most actionable thing in the briefing. If there are no active alerts, omit the alerts section entirely (no "no alerts" line).
 
+### 2c. NYC alternate side parking (exceptions only)
+
+Adds one line to the weather message **only on days when alternate side parking (ASP) is _not_ running normally** — a holiday suspension or a Sunday. On the ~330 ordinary "in effect" days it prints nothing. Silence means normal; that's the contract, and it's why a genuine failure has to be loud (below) rather than looking like an ordinary day.
+
+**Skip conditions** — check in order, stop at the first that matches:
+1. `config.alternate_side_parking.enabled` is not `true` → skip silently.
+2. Step 2 chose a **travel** entry rather than home → skip silently (NYC parking is irrelevant from Barcelona).
+3. Step 2 could not resolve `lat`/`lon` → skip silently (same as step 2b).
+4. The active `lat`/`lon` is **outside NYC** → skip silently. In range means **both** of these hold: `40.47 ≤ lat ≤ 40.93` **and** `-74.28 ≤ lon ≤ -73.68`. Failing *either* one puts it out of range — a location at the right latitude but the wrong longitude (Salt Lake City, Thessaloniki) is not NYC. This is what makes the feature safe to leave enabled in a fork: a briefing whose home is elsewhere will never report NYC parking.
+5. Still here, but **no `NYC_ASP_API_KEY` was provided** in your initial instructions → the feature is on and in range but unconfigured: record a partial failure (`asp: key not provided`) and skip the line. Do NOT skip silently — setup is half-finished and only the alert will say so.
+
+**The key.** `NYC_ASP_API_KEY` arrives in your initial instructions, same channel as `DISCORD_WEBHOOK_URL` — it is never stored in the repo. Export it once before calling curl. **Never echo the key, and never print a curl command with the key inlined** — same rule as the tokenized feed URL in step 3.
+
+```bash
+export NYC_ASP_API_KEY='<value from your initial instructions>'
+```
+
+**Fetch.** The key goes in a request header, so use `curl` (WebFetch cannot set custom headers). Ask for the date in NYC time so the answer stays correct if the run time ever moves:
+
+```bash
+TODAY=$(TZ=America/New_York date +%m/%d/%Y)
+WANT=$(TZ=America/New_York date +%Y%m%d)   # same day, the format the response echoes
+HTTP=$(curl -sS --max-time 20 \
+  -H "Ocp-Apim-Subscription-Key: $NYC_ASP_API_KEY" \
+  "https://api.nyc.gov/public/api/GetCalendar?fromdate=${TODAY}&todate=${TODAY}" \
+  -o /tmp/asp.json -w "%{http_code}")
+echo "ASP fetch HTTP $HTTP for $WANT"
+```
+
+**On a non-200 or a fetch failure:** retry ONCE after 15 seconds, then record a partial failure (`asp: NYC 311 {status}`) and skip the line. Never abort the briefing. **Exception: a 401 means the key is missing or invalid — do not retry it**, it cannot succeed. Record `asp: NYC 311 401 (bad key)` immediately.
+
+**Parse `/tmp/asp.json`.**
+
+**First, confirm you got the day you asked for.** Check that `days[0].today_id` equals `$WANT` (e.g. `"20260804"`). If it doesn't match — or `today_id` is absent — record a partial failure (`asp: date mismatch, got {today_id} want {WANT}`) and skip the line. This is cheap insurance against two silent failures: the sandbox lacking tzdata (so `TZ=America/New_York` quietly falls back to UTC and rolls the date early on a late run), and the API ignoring the date parameters. Reporting tomorrow's suspension as today's is the same tow risk as guessing.
+
+Then find the entry in `days[0].items` whose `type` is exactly `"Alternate Side Parking"`. Read that entry's `status` — the API emits exactly four values, so map them explicitly and **never infer**:
+
+| `status` | Output |
+|---|---|
+| `IN EFFECT` | **No line.** Normal day — this is the silent path. |
+| `SUSPENDED` | `🅿️ **Alt Side Parking:** Suspended today{ — reason}{ (meters …)}` |
+| `NOT IN EFFECT` | `🅿️ **Alt Side Parking:** Not in effect today{ (Sunday)}` |
+| `NO INFORMATION` | No line, **and** record a partial failure (`asp: status unknown`). |
+
+- Anything else — an unrecognized `status`, no `"Alternate Side Parking"` item, an empty `days` array, or unparseable JSON — is treated exactly like `NO INFORMATION`: no line, plus a partial failure (`asp: unexpected response shape`). Guessing here is the one thing that can cost a tow, so a wrong line is strictly worse than no line.
+- For the `SUSPENDED` reason, use the item's `exceptionName` with **a trailing year stripped** — the API returns `"Tisha B'Av 2026"` and `"Labor Day 2026"`, and the briefing is already dated. If `exceptionName` is missing, **omit the reason entirely** — do not fall back to `details`, which is a full sentence that would render as "Suspended today — Alternate side parking is suspended for Tisha B'Av. Meters are in effect." Still use `details` for the meter clause below.
+- **Meters on a suspension day: report only what `details` says.** Meter rules and ASP diverge by holiday and the field states it explicitly — `"Alternate side parking is suspended for Tisha B'Av. Meters are in effect."` vs `"Alternate side parking and meters are suspended for Labor Day."` Append `(meters still in effect)` or `(meters also suspended)` accordingly. If `details` is absent or says nothing about meters, **omit the clause** — never infer it from the holiday.
+- Append `(Sunday)` to the `NOT IN EFFECT` line only when today actually is a Sunday in `America/New_York` — the API documents this status as the Sunday case, but don't assert a weekday you haven't checked.
+
+Hold the line (if any) for the weather message in step 4.
+
 ### 3. Fetch RSS feeds
 
 For each entry in `config.feeds`:
@@ -117,8 +168,13 @@ For each entry in `config.feeds`:
 
 {✅ or ⚠️} **Confidence: {High/Medium/Low}** — {one-line reasoning}
 
-_Source: open-meteo.com_
+🅿️ **Alt Side Parking:** {status}
+(include this line ONLY if step 2c produced one — i.e. today is a suspension or a Sunday. On an ordinary "in effect" day, and whenever step 2c was skipped or failed, omit it entirely.)
+
+_Source: open-meteo.com{ · NYC 311 for parking — append only when the parking line is present}_
 ```
+
+**If step 2 failed** and this message is the `⚠️ Weather data unavailable` fallback, still append the step 2c parking line to it when there is one. The parking lookup is independent of Open-Meteo, so a weather outage must not swallow a suspension notice that was fetched successfully.
 
 #### Message 2 — Headlines (the synthesis — what actually matters today)
 
