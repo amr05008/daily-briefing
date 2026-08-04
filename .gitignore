@@ -9,3 +9,7 @@
 !.env.template
 *.local
 .dev.vars
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
