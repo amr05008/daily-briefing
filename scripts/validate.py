@@ -59,6 +59,21 @@ def check_date(entry: dict, key: str, label: str, required: bool) -> None:
         errors.append(f"{label}: '{key}' must be YYYY-MM-DD, got {entry[key]!r}")
 
 
+# Coarse NYC bounding box — the same gate briefing/prompt.md step 2c applies at
+# run time. Keep the two in sync if either ever moves.
+NYC_LAT = (40.47, 40.93)
+NYC_LON = (-74.28, -73.68)
+
+
+def in_nyc(entry: dict) -> bool:
+    """True if entry's coords sit inside NYC. Unknown coords count as inside —
+    the agent geocodes at run time, so we can't rule it out from here."""
+    lat, lon = entry.get("lat"), entry.get("lon")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return True
+    return NYC_LAT[0] <= lat <= NYC_LAT[1] and NYC_LON[0] <= lon <= NYC_LON[1]
+
+
 def check_structure(config) -> None:
     if not isinstance(config, dict):
         errors.append("config.json must be a JSON object at the top level")
@@ -89,6 +104,24 @@ def check_structure(config) -> None:
                     errors.append(f"{label}: 'start' is after 'end' — this trip can never activate")
             except (TypeError, ValueError):
                 pass  # missing/malformed dates already reported above
+
+    asp = config.get("alternate_side_parking")
+    if asp is not None:
+        if not isinstance(asp, dict):
+            errors.append("'alternate_side_parking' must be an object")
+        elif not isinstance(asp.get("enabled"), bool):
+            errors.append(
+                "alternate_side_parking.enabled must be a boolean, got "
+                f"{asp.get('enabled')!r} — a string like \"false\" reads as ON to the agent"
+            )
+        elif asp["enabled"] and isinstance(weather, dict) and not in_nyc(weather):
+            # Not an error: the agent gates on the same box at run time and stays
+            # silent. Say so once here so a fork doesn't wait for a line that
+            # will never come.
+            warnings.append(
+                "alternate_side_parking is enabled but home is outside NYC — "
+                "the agent will skip it silently"
+            )
 
     feeds = config.get("feeds")
     if not isinstance(feeds, list) or not feeds:
