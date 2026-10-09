@@ -84,15 +84,12 @@ Adds one line to the weather message **only on days when alternate side parking 
 4. The active `lat`/`lon` is **outside NYC** → skip silently. In range means **both** of these hold: `40.47 ≤ lat ≤ 40.93` **and** `-74.28 ≤ lon ≤ -73.68`. Failing *either* one puts it out of range — a location at the right latitude but the wrong longitude (Salt Lake City, Thessaloniki) is not NYC. This is what makes the feature safe to leave enabled in a fork: a briefing whose home is elsewhere will never report NYC parking.
 5. Still here, but **no `NYC_ASP_API_KEY` was provided** in your initial instructions → the feature is on and in range but unconfigured: record a partial failure (`asp: key not provided`) and skip the line. Do NOT skip silently — setup is half-finished and only the alert will say so.
 
-**The key.** `NYC_ASP_API_KEY` arrives in your initial instructions, same channel as `DISCORD_WEBHOOK_URL` — it is never stored in the repo. Export it once before calling curl. **Never echo the key, and never print a curl command with the key inlined** — same rule as the tokenized feed URL in step 3.
+**The key.** `NYC_ASP_API_KEY` arrives in your initial instructions, same channel as `DISCORD_WEBHOOK_URL` — it is never stored in the repo. **Never echo the key, and never print a curl command with the key inlined** — same rule as the tokenized feed URL in step 3.
+
+**Fetch.** The key goes in a request header, so use `curl` (WebFetch cannot set custom headers). Ask for the date in NYC time so the answer stays correct if the run time ever moves. **Run this as one command:** environment variables don't carry over between your shell calls, so the key is exported in the same block that uses it — on a retry, run the whole block again.
 
 ```bash
 export NYC_ASP_API_KEY='<value from your initial instructions>'
-```
-
-**Fetch.** The key goes in a request header, so use `curl` (WebFetch cannot set custom headers). Ask for the date in NYC time so the answer stays correct if the run time ever moves:
-
-```bash
 TODAY=$(TZ=America/New_York date +%m/%d/%Y)
 WANT=$(TZ=America/New_York date +%Y%m%d)   # same day, the format the response echoes
 HTTP=$(curl -sS --max-time 20 \
