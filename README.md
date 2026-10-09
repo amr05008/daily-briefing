@@ -63,6 +63,12 @@ Quiet today: Elena Verna, Pragmatic Engineer
 ...
 ```
 
+**Audio** (optional) — if your trigger has an `OPENROUTER_API_KEY`, a last message carries a two-to-three-minute spoken version of the whole briefing as an mp3, rewritten for listening rather than read word for word:
+```
+[Claude] [AUDIO] Saturday, March 28
+(briefing-2026-03-28.mp3 attached)
+```
+
 ---
 
 ## How it works
@@ -77,6 +83,7 @@ Claude Code lets you schedule remote agents on a cron schedule. Each run:
 6. It fetches your configured RSS feeds and filters to posts from the last ~24 hours (26h window, so a slow or late run never silently drops a post)
 7. It synthesizes a Headlines message — the 2–3 items across all feeds that matter most, ranked against your interests
 8. It posts to Discord (or other configured channels)
+9. If an OpenRouter key is set, it posts a spoken mp3 version last (ElevenLabs voice via [OpenRouter](https://openrouter.ai))
 
 No server, no cron job, no infrastructure. Just a repo and a trigger.
 
@@ -150,7 +157,7 @@ STRATECHERY_FEED_URL=https://stratechery.passport.online/feed/rss/YOUR_TOKEN
 Then read briefing/prompt.md and follow its instructions exactly.
 ```
 
-(The `STRATECHERY_FEED_URL` line is only needed if you use a `$PLACEHOLDER` feed — one line per placeholder, named to match. You can also add `DISCORD_ALERT_WEBHOOK_URL=...` pointing at a separate channel if you want partial-failure alerts routed away from the briefing itself — if you skip it, alerts fall back to the main webhook. Add `NYC_ASP_API_KEY=...` if you're in NYC and want the [alternate side parking line](#nyc-alternate-side-parking).)
+(The `STRATECHERY_FEED_URL` line is only needed if you use a `$PLACEHOLDER` feed — one line per placeholder, named to match. You can also add `DISCORD_ALERT_WEBHOOK_URL=...` pointing at a separate channel if you want partial-failure alerts routed away from the briefing itself — if you skip it, alerts fall back to the main webhook. Add `NYC_ASP_API_KEY=...` if you're in NYC and want the [alternate side parking line](#nyc-alternate-side-parking). Add `OPENROUTER_API_KEY=...` for the spoken [audio version](#what-it-looks-like): about 4–6¢ a day, billed per character (as of October 2026, while OpenRouter discounts ElevenLabs by half; about double without the discount). Give that key its own monthly limit on OpenRouter, and delete the line to turn the audio off.)
 
 No bot setup, no OAuth — Discord webhooks are just HTTPS endpoints. Storing secrets in the trigger (not the repo) means you can keep your repo public without exposing them.
 
@@ -177,7 +184,7 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
 STRATECHERY_FEED_URL=https://stratechery.passport.online/feed/rss/YOUR_TOKEN
 Then read briefing/prompt.md and follow its instructions exactly.
 ```
-(Drop the `STRATECHERY_FEED_URL` line if you have no `$PLACEHOLDER` feeds. Add `NYC_ASP_API_KEY=...` on its own line for the [NYC parking status](#nyc-alternate-side-parking).)
+(Drop the `STRATECHERY_FEED_URL` line if you have no `$PLACEHOLDER` feeds. Add `NYC_ASP_API_KEY=...` on its own line for the [NYC parking status](#nyc-alternate-side-parking), and `OPENROUTER_API_KEY=...` for the spoken [audio version](#what-it-looks-like).)
 
 ### 6. Test it
 
