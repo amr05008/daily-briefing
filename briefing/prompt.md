@@ -262,6 +262,74 @@ Use Notion MCP — search for parent page matching `parent_search_query`, create
 **If `delivery.email.enabled` is true:**
 Use email MCP to send full version as HTML. (Skip if connector unavailable.)
 
+### 5b. Voice version (optional — only if `OPENROUTER_API_KEY` was provided)
+
+A spoken version of today's briefing, posted as one audio file after the text. This step never changes or delays the text messages, which are already posted. Skip it silently when **either** of these is true:
+- no `OPENROUTER_API_KEY` was provided in your initial instructions (the key is the on/off switch), or
+- not one step 5 Discord post returned a 2xx (no webhook, or the webhook is dead; any failed posts are already partial failures).
+
+**1. Write the script** — the briefing you just posted, rewritten to be listened to rather than read. **At most about 2,800 characters** (about three minutes); shorter is fine, and never pad a quiet day. If it runs long, cut per-feed items before headlines. Save it with a quoted heredoc, so apostrophes need no escaping:
+
+```bash
+cat > /tmp/voice_script.txt <<'SCRIPT'
+<the whole script>
+SCRIPT
+```
+
+- **Open:** "Good morning. It's {Weekday}, {Month} {ordinal}. Here's your briefing."
+- **Weather:** active alerts first, if any. Then wind (it's the top priority in `user-context.md`), the temperature now, today's high, and rain ("no rain today" when there's none). Fahrenheit only. Name the place when step 2 used a travel location. Include the parking line if step 2c printed one. If step 2 used the unavailable fallback, say "Weather data was unavailable this morning."
+- **Headlines:** each item as what happened, then why it matters.
+- **Per-feed items:** one sentence each, grouped by source ("Simon Willison wrote about…").
+- **Close:** name the quiet feeds in one line, then "That's your briefing." On a day with no new posts anywhere, say so after the weather and close.
+- **Never say aloud:** URLs, emoji, markdown, bullets, °C, "Source:" lines, the `[Claude]` tags, or the `_Unavailable:_` line (step 6 reports failures).
+- **Numbers the way a person says them:** "seventy-seven", "ten cents per million tokens", "Haiku five point five".
+- **Nothing new:** only what you fetched and posted today. Add no facts, numbers or opinions.
+
+**2. Make the audio.** One request, no retry. **Run this as one command:** environment variables don't carry over between your shell calls, so the key is exported in the same block that uses it. **Never echo the key, and never print a curl command with the key inlined.**
+
+```bash
+export OPENROUTER_API_KEY='<value from your initial instructions>'
+rm -f /tmp/voice_req.json /tmp/briefing.mp3
+python3 - <<'EOF'
+import json
+script = open("/tmp/voice_script.txt").read().strip()
+if not script:
+    raise SystemExit("voice script is empty")
+body = {"model": "elevenlabs/eleven-v4-turbo", "voice": "george",
+        "response_format": "mp3", "input": script}
+open("/tmp/voice_req.json", "w").write(json.dumps(body))
+print(f"voice script: {len(script)} characters")
+EOF
+VOICE=$(curl -sS --max-time 90 -X POST \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/voice_req.json \
+  -o /tmp/briefing.mp3 -w "%{http_code} %{content_type}" \
+  https://openrouter.ai/api/v1/audio/speech)
+RC=$?
+echo "voice: curl rc=$RC $VOICE, $(wc -c < /tmp/briefing.mp3 2>/dev/null || echo 0) bytes"
+```
+
+Go on only if **all three** hold: curl `rc=0`, status `200` with a content type starting `audio/mpeg`, and the file is over 20,000 bytes. A cut-off download can still report `200 audio/mpeg`, which is why the exit code and size are checked too. Otherwise:
+- record a partial failure: `voice: OpenRouter {status} {content type}`, `voice: curl rc={n}`, or `voice: empty script`;
+- if the body is JSON or text, print its first 300 characters (never binary);
+- skip the rest of this step.
+
+**3. Post it** to the same webhook as step 5, as a multipart upload with the header line and the file. `{Day, Month DD}` is the same date label the other messages use.
+
+```bash
+python3 -c 'import json,sys; print(json.dumps({"content": sys.argv[1]}))' \
+  "[Claude] [AUDIO] {Day, Month DD}" > /tmp/voice_payload.json
+POST=$(curl -sS --max-time 60 -o /tmp/voice_post.txt -w "%{http_code}" \
+  -F "payload_json=</tmp/voice_payload.json" \
+  -F "files[0]=@/tmp/briefing.mp3;type=audio/mpeg;filename=briefing-$(TZ=America/New_York date +%Y-%m-%d).mp3" \
+  "WEBHOOK_URL_FROM_CONFIG")
+RC=$?
+echo "voice post: curl rc=$RC HTTP $POST"
+```
+
+Any 2xx is success. Otherwise print `/tmp/voice_post.txt` and record a partial failure (`voice: Discord {status}`).
+
 ### 6. Alert on partial failure (only if anything went wrong)
 
 If your "partial failures" list (from the top) is **empty**, skip this step — silent success.
