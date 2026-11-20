@@ -166,7 +166,7 @@ Create a new trigger with these settings:
 | Schedule | `15 10 * * *` (6:15am ET — adjust for your timezone, cron is UTC) |
 | Environment | Internet Access |
 | Git source | Your fork's GitHub URL |
-| Model | `claude-opus-4-8` |
+| Model | `claude-opus-5-5` |
 | Tools | `Bash, Read, Write, Edit, Glob, Grep, WebFetch` |
 
 **Bootstrap prompt** — the version from step 4, with your secret lines filled in:
